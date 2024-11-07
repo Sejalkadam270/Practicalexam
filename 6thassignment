@@ -1,0 +1,83 @@
+import os
+import numpy as np
+import matplotlib.pyplot as plt
+from tensorflow.keras.preprocessing.image import ImageDataGenerator
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import GlobalAveragePooling2D, Dense
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras import backend as K
+from tensorflow.keras.applications import VGG16
+
+# Clear any previous session
+K.clear_session()
+
+# Define paths for training and validation directories
+train_dir = r'C:\Users\GEMINI\Downloads\train_directory'  # Update this path
+val_dir = r'C:\Users\GEMINI\Downloads\validation_directory'  # Update this path
+
+# Step 1: Prepare image data generators with updated target size
+img_gen = ImageDataGenerator(rescale=1./255)  # Normalize pixel values
+
+# Load training data
+train_data_gen = img_gen.flow_from_directory(
+    train_dir,
+    target_size=(224, 224),  # Change target size to 224x224 for VGG16
+    batch_size=8,  # Adjusted batch size
+    class_mode='categorical'
+)
+
+# Load validation data
+val_data_gen = img_gen.flow_from_directory(
+    val_dir,
+    target_size=(224, 224),  # Change target size to 224x224 for VGG16
+    batch_size=8,  # Adjusted batch size
+    class_mode='categorical'
+)
+
+# Confirm class indices and number of samples
+print("Class indices:", train_data_gen.class_indices)
+print(f"Training samples: {train_data_gen.samples}, Validation samples: {val_data_gen.samples}")
+
+# Step 2: Load the VGG16 model without the top layers
+base_model = VGG16(weights='imagenet', include_top=False, input_shape=(224, 224, 3))
+
+# Freeze the base model layers
+for layer in base_model.layers:
+    layer.trainable = False
+
+# Print base model input shape
+print("Base model input shape:", base_model.input_shape)
+
+# Step 3: Build the full model
+model = Sequential([
+    base_model,
+    GlobalAveragePooling2D(),  # Use GlobalAveragePooling2D instead of Flatten
+    Dense(128, activation='relu'),
+    Dense(len(train_data_gen.class_indices), activation='softmax')  # Output layer
+])
+
+# Step 4: Compile the model
+model.compile(optimizer=Adam(), loss='categorical_crossentropy', metrics=['accuracy'])
+
+# Print model summary for debuggin
+# Step 5: Train the model
+steps_per_epoch = train_data_gen.samples // train_data_gen.batch_size
+validation_steps = val_data_gen.samples // val_data_gen.batch_size
+
+
+history = model.fit(
+        train_data_gen,
+        steps_per_epoch=steps_per_epoch,
+        validation_data=val_data_gen,
+        validation_steps=validation_steps,
+        epochs=10  # Adjust as necessary
+    )
+
+
+# Optional: Plot training history
+plt.plot(history.history['accuracy'], label='accuracy')
+plt.plot(history.history['val_accuracy'], label='val_accuracy')
+plt.xlabel('Epoch')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.show()
